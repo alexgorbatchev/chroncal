@@ -146,27 +146,28 @@ func ExpandTodo(td todo.Todo, from, to time.Time) []ExpandedTodo {
 	return instances
 }
 
+// todoAtOccurrence returns the master todo with DUE and DTSTART moved to the
+// occurrence. Each date keeps its date-only or RFC 3339 form.
+func todoAtOccurrence(i ExpandedTodo) todo.Todo {
+	t := i.Todo
+	anchor := todoAnchor(t)
+	if !anchor.IsZero() {
+		offset := i.InstanceTime.Sub(anchor)
+		t.DueDate = shiftDateString(t.DueDate, t.ParseDueDate(), offset)
+		t.StartDate = shiftDateString(t.StartDate, t.ParseStartDate(), offset)
+	}
+	return t
+}
+
 // expandRecurringTodoRows expands recurring todo rows into Todo instances with
 // DueDate/StartDate adjusted to each occurrence. For each master, overrides
 // (rows with a match of RECURRENCE-ID) replace the original RRULE instance.
 func (s *Service) expandRecurringTodoRows(ctx context.Context, rows []storage.Todo, from, to time.Time) ([]todo.Todo, error) {
 	k := recurringKind[storage.Todo, todo.Todo, ExpandedTodo]{
-		fromRow:  todoFromRow,
-		expand:   ExpandTodo,
-		instTime: func(i ExpandedTodo) time.Time { return i.InstanceTime },
-		applyInstance: func(i ExpandedTodo) todo.Todo {
-			t := i.Todo
-			anchor := t.ParseStartDate()
-			if anchor.IsZero() {
-				anchor = t.ParseDueDate()
-			}
-			if !anchor.IsZero() {
-				offset := i.InstanceTime.Sub(anchor)
-				t.DueDate = shiftDateString(t.DueDate, t.ParseDueDate(), offset)
-				t.StartDate = shiftDateString(t.StartDate, t.ParseStartDate(), offset)
-			}
-			return t
-		},
+		fromRow:        todoFromRow,
+		expand:         ExpandTodo,
+		instTime:       func(i ExpandedTodo) time.Time { return i.InstanceTime },
+		applyInstance:  todoAtOccurrence,
 		uid:            func(r storage.Todo) string { return seriesKey(r.CalendarID, r.Uid) },
 		status:         func(r storage.Todo) string { return r.Status },
 		recurrenceID:   func(r storage.Todo) string { return r.RecurrenceID },

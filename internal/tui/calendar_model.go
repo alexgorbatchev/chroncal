@@ -175,16 +175,17 @@ func (m CalendarModel) DayAtPosition(x, y int) (time.Time, bool) {
 	return hit.Day, ok
 }
 
-// EventAtPosition returns the ID of the visible month-view event pill at the
-// given position. It returns 0 when the click does not land on a rendered event.
-func (m CalendarModel) EventAtPosition(x, y int) int64 {
+// ItemAtPosition returns the record of the visible month-view item at the
+// given position. It returns the zero ref when the click does not land on a
+// rendered item.
+func (m CalendarModel) ItemAtPosition(x, y int) calendarItemRef {
 	hit, ok := m.hitCell(x, y)
 	if !ok || hit.Line < 1 {
-		return 0
+		return calendarItemRef{}
 	}
 	maxEventLines := hit.CellH - 1
 	if maxEventLines < 1 {
-		return 0
+		return calendarItemRef{}
 	}
 
 	dy, dm, dd := hit.Day.Date()
@@ -201,10 +202,10 @@ func (m CalendarModel) EventAtPosition(x, y int) int64 {
 		visibleEvents--
 	}
 	if visibleEvents <= 0 || hit.Line > visibleEvents {
-		return 0
+		return calendarItemRef{}
 	}
 
-	return events[hit.Line-1].ID
+	return events[hit.Line-1].ref()
 }
 
 // moveCursor moves the cursor to day, syncs m.month to it, and returns a

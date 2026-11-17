@@ -127,24 +127,11 @@ func placeDayEvents(events []CalendarEvent, day time.Time, lph int) []placedEven
 }
 
 func dayAllDayCount(events []CalendarEvent, day time.Time) int {
-	dayKey := day.Format("2006-01-02")
-	count := 0
-	for _, ev := range events {
-		if ev.AllDay && ev.Day.Format("2006-01-02") == dayKey {
-			count++
-		}
-	}
-	return count
+	return len(allDayStripRows(events, day))
 }
 
 func renderDayAllDayRows(events []CalendarEvent, day time.Time, colWidth int, numRows int) string {
-	dayKey := day.Format("2006-01-02")
-	var allDayEvents []CalendarEvent
-	for _, ev := range events {
-		if ev.AllDay && ev.Day.Format("2006-01-02") == dayKey {
-			allDayEvents = append(allDayEvents, ev)
-		}
-	}
+	stripRows := allDayStripRows(events, day)
 
 	faint := lipgloss.NewStyle().Faint(true)
 	faintSep := faint.Render("│")
@@ -157,8 +144,8 @@ func renderDayAllDayRows(events []CalendarEvent, day time.Time, colWidth int, nu
 			out.WriteString("        ")
 		}
 		out.WriteString(faintSep)
-		if row < len(allDayEvents) {
-			out.WriteString(renderEventPill(allDayEvents[row], colWidth, false))
+		if row < len(stripRows) {
+			out.WriteString(renderStripRow(stripRows[row], colWidth))
 		} else {
 			out.WriteString(strings.Repeat(" ", colWidth))
 		}

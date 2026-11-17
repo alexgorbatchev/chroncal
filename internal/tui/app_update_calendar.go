@@ -86,11 +86,7 @@ func (m Model) handleCalendarVisibilityToggled(msg CalendarVisibilityToggledMsg)
 	m.sidebar = m.sidebar.SetList(list)
 	m.saveUIState()
 	m = m.refreshCalendarViews()
-	if m.dialogOpen {
-		dayEvents := eventsOn(filterVisibleEvents(m.events, m.hiddenCalendars), m.dialog.day)
-		m.dialog = m.dialog.SetEvents(dayEvents)
-	}
-	return m, nil
+	return m.refreshDayDialog(), nil
 }
 
 func (m Model) handleCalendarReordered(msg CalendarReorderedMsg) (tea.Model, tea.Cmd) {

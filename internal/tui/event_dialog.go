@@ -99,6 +99,9 @@ type EventDialogModel struct {
 	// dialog has dozens of events.
 	events      []event.Event
 	eventLabels []string
+	// todos follow the events in the list. The row index of a todo is
+	// len(events) plus its index in todos.
+	todos       []todoEntry
 	calendars   map[int64]CalendarInfo
 	keys        eventDialogKeyMap
 	focusedRSVP int
@@ -106,14 +109,32 @@ type EventDialogModel struct {
 }
 
 // buildEventLabels precomputes the unstyled row labels for the current
-// events slice. Called from the constructor and SetEvents so refresh
-// can reuse the labels across navigation keystrokes.
+// events and todos. Called from the constructor, SetEvents, and SetTodos so
+// refresh can reuse the labels across navigation keystrokes.
 func (m EventDialogModel) buildEventLabels() EventDialogModel {
-	m.eventLabels = make([]string, len(m.events))
-	for i, ev := range m.events {
-		m.eventLabels[i] = formatEventLabel(ev, m.day)
+	m.eventLabels = make([]string, 0, m.rowCount())
+	for _, ev := range m.events {
+		m.eventLabels = append(m.eventLabels, formatEventLabel(ev, m.day))
+	}
+	for _, e := range m.todos {
+		m.eventLabels = append(m.eventLabels, formatTodoLabel(e))
 	}
 	return m
+}
+
+// rowCount returns the count of list rows: the events, then the todos.
+func (m EventDialogModel) rowCount() int {
+	return len(m.events) + len(m.todos)
+}
+
+// formatTodoLabel returns the list label of a todo: the checkbox and the
+// summary, after the DUE time for a todo with a time on this day.
+func formatTodoLabel(e todoEntry) string {
+	label := todoGlyph(e.todo.IsCompleted()) + " " + e.todo.Summary
+	if e.placement.At.IsZero() {
+		return label
+	}
+	return e.placement.At.In(e.placement.Day.Location()).Format("15:04") + "  " + label
 }
 
 func NewEventDialogModel(day time.Time, events []event.Event, calendars map[int64]CalendarInfo, h help.Model) EventDialogModel {
@@ -156,9 +177,20 @@ func (m EventDialogModel) SetSelectedColor(c color.Color) EventDialogModel {
 
 func (m EventDialogModel) SetEvents(events []event.Event) EventDialogModel {
 	m.events = events
+	return m.rowsChanged()
+}
+
+// SetTodos sets the todos of the day. They show after the events.
+func (m EventDialogModel) SetTodos(todos []todoEntry) EventDialogModel {
+	m.todos = todos
+	return m.rowsChanged()
+}
+
+// rowsChanged rebuilds the labels and keeps the selection inside the list.
+func (m EventDialogModel) rowsChanged() EventDialogModel {
 	m = m.buildEventLabels()
-	if sel := m.shell.Selected(); sel >= len(events) {
-		m.shell = m.shell.SetSelected(max(0, len(events)-1))
+	if sel := m.shell.Selected(); sel >= m.rowCount() {
+		m.shell = m.shell.SetSelected(max(0, m.rowCount()-1))
 	}
 	return m.refresh()
 }
@@ -171,6 +203,15 @@ func (m EventDialogModel) selectedEvent() (event.Event, bool) {
 		return event.Event{}, false
 	}
 	return m.events[idx], true
+}
+
+// selectedTodo returns the todo of the selected row, when that row is a todo.
+func (m EventDialogModel) selectedTodo() (todoEntry, bool) {
+	idx := m.shell.Selected() - len(m.events)
+	if idx < 0 || idx >= len(m.todos) {
+		return todoEntry{}, false
+	}
+	return m.todos[idx], true
 }
 
 func (m EventDialogModel) userAttendee() (model.Attendee, bool) {
@@ -266,10 +307,12 @@ type eventMetaDetailLinesOptions struct {
 	conference string
 	url        string
 	status     string
-	tags       string
-	repeat     string
-	showAs     string
-	visibility string
+	// statusBadge renders status. A nil value uses the event statusBadge.
+	statusBadge func(status string) string
+	tags        string
+	repeat      string
+	showAs      string
+	visibility  string
 }
 
 // eventMetaURLRewriter returns a link rewriter for event metadata rows. It
@@ -332,7 +375,11 @@ func eventMetaDetailLines(opts eventMetaDetailLinesOptions) []string {
 	addURL("Conference", opts.conference)
 	addURL("URL", opts.url)
 	if opts.status != "" {
-		add("Status", statusBadge(opts.status))
+		render := opts.statusBadge
+		if render == nil {
+			render = statusBadge
+		}
+		add("Status", render(opts.status))
 	}
 	add("Tags", opts.tags)
 	add("Repeat", opts.repeat)

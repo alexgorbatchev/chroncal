@@ -86,6 +86,10 @@ func (m AgendaModel) View() string {
 			out.WriteString(m.renderEmptyDayRow(m.rows[i], i == m.selected))
 			continue
 		}
+		if m.rows[i].todo != nil {
+			out.WriteString(m.renderTodoRow(m.rows[i], i == m.selected))
+			continue
+		}
 		out.WriteString(m.renderEventRow(m.rows[i], i == m.selected))
 	}
 	return out.String()
@@ -180,6 +184,75 @@ func (m AgendaModel) renderEventRow(r agendaRow, selected bool) string {
 		Render(truncateTo(title, titleW))
 
 	return prefix + timeCol + titleCol
+}
+
+// renderTodoRow composes the agenda line of a todo. The layout matches an
+// event row. The checkbox takes the place of the calendar dot, and the time
+// column shows the DUE time or the todo state.
+func (m AgendaModel) renderTodoRow(r agendaRow, selected bool) string {
+	e := *r.todo
+	item := CalendarEvent{
+		Color:   m.calendars[e.todo.CalendarID].Color,
+		Done:    e.todo.IsCompleted(),
+		Overdue: e.placement.Overdue,
+	}
+
+	unpainted := lipgloss.NewStyle()
+	highlight := lipgloss.NewStyle()
+	if selected {
+		highlight = highlight.Background(m.selectedColor).Bold(true)
+	}
+
+	glyph := unpainted.Foreground(todoGlyphColor(item)).Render(todoGlyph(item.Done))
+	prefix := unpainted.Render(strings.Repeat(" ", agendaLeftPad)) +
+		m.renderDayColumn(r, unpainted, false) +
+		unpainted.Render(" ") +
+		unpainted.Width(agendaDotColWidth).Render(" "+glyph+" ")
+
+	timeText, timed := agendaTodoTimeText(e)
+	timeFg := m.theme.TextDim
+	switch {
+	case selected:
+		timeFg = m.theme.SelectedText
+	case e.placement.Overdue:
+		timeFg = m.theme.Error
+	}
+	timeCol := highlight.Foreground(timeFg).Italic(!timed).Width(agendaTimeColWidth).Render(timeText)
+
+	titleW := max(m.width-lipgloss.Width(prefix)-agendaTimeColWidth, 1)
+	titleStyle := highlight.Foreground(m.theme.Text).Width(titleW)
+	switch {
+	case selected:
+		titleStyle = titleStyle.Foreground(m.theme.SelectedText)
+	case item.Done:
+		titleStyle = titleStyle.Foreground(m.theme.TextDim)
+	}
+	title := truncateTo(e.todo.Summary, titleW)
+	if item.Done {
+		// Strike through the title text only, not the padding after it.
+		title = lipgloss.NewStyle().Strikethrough(true).Render(title)
+	}
+	return prefix + timeCol + titleStyle.Render(title)
+}
+
+// agendaTodoTimeText returns the time-column text of a todo and reports
+// whether the text is a clock time:
+//
+//   - A todo with a time on its DUE day shows that time.
+//   - An overdue todo shows its DUE date.
+//   - A completed todo shows "Done".
+//   - Any other todo shows "To do".
+func agendaTodoTimeText(e todoEntry) (string, bool) {
+	switch {
+	case !e.placement.At.IsZero():
+		return e.placement.At.In(e.placement.Day.Location()).Format("15:04"), true
+	case e.placement.Overdue:
+		return "Due " + todoDateDay(e.todo.DueDate, e.placement.Day.Location()).Format("Jan 2"), false
+	case e.todo.IsCompleted():
+		return "Done", false
+	default:
+		return "To do", false
+	}
 }
 
 // renderDayColumn returns the 8-column-wide day label shown at the start

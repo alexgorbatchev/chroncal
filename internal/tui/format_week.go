@@ -268,31 +268,15 @@ func renderWeekHRule(colWs []int, left, mid, right string, timeCol bool, selecte
 func weekAllDayRowCount(events []CalendarEvent, anchor time.Time) int {
 	maxPerCol := 0
 	for col := range 7 {
-		d := anchor.AddDate(0, 0, col)
-		dayKey := d.Format("2006-01-02")
-		count := 0
-		for _, ev := range events {
-			if ev.AllDay && ev.Day.Format("2006-01-02") == dayKey {
-				count++
-			}
-		}
-		if count > maxPerCol {
-			maxPerCol = count
-		}
+		maxPerCol = max(maxPerCol, len(allDayStripRows(events, anchor.AddDate(0, 0, col))))
 	}
 	return maxPerCol
 }
 
 func renderWeekAllDayRows(events []CalendarEvent, anchor time.Time, colWs []int, numRows int, selectedCol int, selectedColor color.Color) string {
-	eventsByCol := make([][]CalendarEvent, 7)
-	for _, ev := range events {
-		if !ev.AllDay {
-			continue
-		}
-		col := findWeekCol(anchor, ev.Day)
-		if col >= 0 {
-			eventsByCol[col] = append(eventsByCol[col], ev)
-		}
+	rowsByCol := make([][]stripRow, 7)
+	for col := range 7 {
+		rowsByCol[col] = allDayStripRows(events, anchor.AddDate(0, 0, col))
 	}
 
 	faint := lipgloss.NewStyle().Faint(true)
@@ -317,8 +301,8 @@ func renderWeekAllDayRows(events []CalendarEvent, anchor time.Time, colWs []int,
 			} else {
 				out.WriteString(faintSep)
 			}
-			if row < len(eventsByCol[i]) {
-				out.WriteString(renderEventPill(eventsByCol[i][row], colWs[i], false))
+			if row < len(rowsByCol[i]) {
+				out.WriteString(renderStripRow(rowsByCol[i][row], colWs[i]))
 			} else {
 				out.WriteString(strings.Repeat(" ", colWs[i]))
 			}

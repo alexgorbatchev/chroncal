@@ -16,6 +16,19 @@ func (m Model) dispatchAppMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case eventsLoadedMsg:
 		return m.handleEventsLoaded(msg)
 
+	case todosLoadedMsg:
+		return m.handleTodosLoaded(msg)
+
+	case TodoViewRequestedMsg:
+		return m.handleTodoViewRequested(msg)
+
+	case todoViewLoadedMsg:
+		return m.handleTodoViewLoaded(msg)
+
+	case TodoViewClosedMsg:
+		m.todoViewOpen = false
+		return m, nil
+
 	case calendarsLoadedMsg:
 		return m.handleCalendarsLoaded(msg)
 

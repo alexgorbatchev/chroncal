@@ -424,6 +424,77 @@ func (q *Queries) ListAllTodos(ctx context.Context) ([]Todo, error) {
 	return items, nil
 }
 
+const listCompletedTodosByDate = `-- name: ListCompletedTodosByDate :many
+SELECT id, uid, calendar_id, summary, description, location, due_date, start_date, duration, completed_at, percent_complete, status, priority, class, url, recurrence_rule, timezone, sequence, exdates, rdates, recurrence_id, geo, created_at, updated_at, dtstamp, deleted_at FROM todos
+WHERE status = 'COMPLETED'
+  AND deleted_at IS NULL
+  AND (recurrence_id != '' OR (recurrence_rule IS NULL AND (rdates IS NULL OR rdates = '')))
+  AND (
+    (due_date >= ?1 AND due_date < ?2)
+    OR (due_date IS NULL AND completed_at >= ?1 AND completed_at < ?2)
+  )
+ORDER BY due_date, summary
+`
+
+type ListCompletedTodosByDateParams struct {
+	FromDate *string
+	ToDate   *string
+}
+
+// Completed rows that a calendar shows as done: non-recurring todos and
+// overrides. A recurring master is not one occurrence, so the query omits it.
+// The date is DUE, or completed_at for a todo without DUE. The bounds are
+// date strings, so the caller applies the exact window.
+func (q *Queries) ListCompletedTodosByDate(ctx context.Context, arg ListCompletedTodosByDateParams) ([]Todo, error) {
+	rows, err := q.db.QueryContext(ctx, listCompletedTodosByDate, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Todo
+	for rows.Next() {
+		var i Todo
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uid,
+			&i.CalendarID,
+			&i.Summary,
+			&i.Description,
+			&i.Location,
+			&i.DueDate,
+			&i.StartDate,
+			&i.Duration,
+			&i.CompletedAt,
+			&i.PercentComplete,
+			&i.Status,
+			&i.Priority,
+			&i.Class,
+			&i.Url,
+			&i.RecurrenceRule,
+			&i.Timezone,
+			&i.Sequence,
+			&i.Exdates,
+			&i.Rdates,
+			&i.RecurrenceID,
+			&i.Geo,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Dtstamp,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDeletedTodoOverrideRecurrenceIDs = `-- name: ListDeletedTodoOverrideRecurrenceIDs :many
 SELECT recurrence_id FROM todos
 WHERE uid = ? AND recurrence_id != '' AND deleted_at IS NOT NULL

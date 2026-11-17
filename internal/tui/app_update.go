@@ -12,7 +12,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.clockTickScheduled = false
-		m = m.refreshToday(time.Now())
+		now := time.Now()
+		m = m.refreshToday(now).placeTodosAt(now)
 		return m.scheduleClockTick()
 	}
 	if next, cmd, handled := m.dispatchLifecycleMsg(msg); handled {

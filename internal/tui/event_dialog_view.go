@@ -47,7 +47,7 @@ func (m EventDialogModel) listRowWidth() int {
 // refresh rebuilds the shell's rows, detail lines, actions, and help row
 // from the current day, events, and focus state.
 func (m EventDialogModel) refresh() EventDialogModel {
-	rows := make([]string, len(m.events))
+	rows := make([]string, m.rowCount())
 	sel := m.shell.Selected()
 	listFocused := m.shell.FocusZone() == ListZoneList
 	rowW := m.listRowWidth()
@@ -55,7 +55,7 @@ func (m EventDialogModel) refresh() EventDialogModel {
 	// Reuse pre-formatted labels (built once per events change in
 	// buildEventLabels). Only the selected row gets re-styled per
 	// keystroke; the other rows are direct pointer copies.
-	if len(m.eventLabels) != len(m.events) {
+	if len(m.eventLabels) != m.rowCount() {
 		m = m.buildEventLabels()
 	}
 	copy(rows, m.eventLabels)
@@ -89,11 +89,15 @@ func (m EventDialogModel) refresh() EventDialogModel {
 		}
 		lines, _ := eventDetailLines(ev, cal, w, m.labelWidth(), rsvpLine, rw)
 		m.shell = m.shell.SetDetailTitle(textsafe.Display(ev.Title)).SetDetailLines(lines)
+	} else if e, ok := m.selectedTodo(); ok {
+		cal := m.calendars[e.todo.CalendarID]
+		lines := todoDetailLines(e.todo, cal, e.placement.Overdue, w, m.labelWidth(), false)
+		m.shell = m.shell.SetDetailTitle(textsafe.Display(e.todo.Summary)).SetDetailLines(lines)
 	} else {
 		m.shell = m.shell.SetDetailTitle("").SetDetailLines(nil)
 	}
 
-	if len(m.events) == 0 {
+	if m.rowCount() == 0 {
 		faint := lipgloss.NewStyle().Faint(true)
 		m.shell = m.shell.SetEmptyList("", []string{faint.Render("No events on this day.")})
 		m.shell = m.shell.SetActions(nil)

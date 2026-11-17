@@ -13,6 +13,7 @@ import (
 	"github.com/douglasdemoura/chroncal/internal/config"
 	"github.com/douglasdemoura/chroncal/internal/event"
 	syncpkg "github.com/douglasdemoura/chroncal/internal/sync"
+	"github.com/douglasdemoura/chroncal/internal/todo"
 	"github.com/douglasdemoura/chroncal/internal/trash"
 )
 
@@ -162,6 +163,21 @@ func (p pendingAction) isCalendarMove() bool {
 type eventViewLoadedMsg struct {
 	event event.Event
 	err   error
+}
+
+// todosLoadedMsg carries the open todos and the completed todos of the
+// [from, to) range. The handler drops a response whose range no longer
+// matches the active view.
+type todosLoadedMsg struct {
+	from  time.Time
+	to    time.Time
+	todos []todo.Todo
+	err   error
+}
+
+type todoViewLoadedMsg struct {
+	todo todo.Todo
+	err  error
 }
 
 type eventUpdatedMsg struct {
@@ -418,8 +434,13 @@ type Model struct {
 	// mean "no prior load" and force a full refresh.
 	loadedFrom time.Time
 	loadedTo   time.Time
-	calendars  map[int64]CalendarInfo
-	accounts   map[int64]account.Account
+	// todos holds the open todos and the completed todos of the expected
+	// range. todoEntries holds the same todos placed for the current time.
+	// The clock tick places them again, so "today" follows the date.
+	todos       []todo.Todo
+	todoEntries []todoEntry
+	calendars   map[int64]CalendarInfo
+	accounts    map[int64]account.Account
 	// pendingOrder holds an optimistic sidebar order (calendar ID → position)
 	// for a reorder whose async SetOrder has not yet confirmed. It is overlaid
 	// onto reloads so an interleaved loadCalendars (e.g. a sync finishing
@@ -435,6 +456,8 @@ type Model struct {
 	dialogOpen               bool
 	viewDialog               EventViewDialogModel
 	viewDialogOpen           bool
+	todoView                 TodoViewDialogModel
+	todoViewOpen             bool
 	// pendingOpenEvent is set by WithOpenEvent so the first events load
 	// can select that occurrence and open the view dialog.
 	pendingOpenEvent event.Event
@@ -462,7 +485,7 @@ type Model struct {
 	weekStart       time.Weekday
 	focus           appFocus
 	hiddenCalendars map[int64]bool
-	clickedEventID  int64
+	clickedItem     calendarItemRef
 
 	sidebar                     SidebarModel
 	calendarManager             CalendarManagerModel

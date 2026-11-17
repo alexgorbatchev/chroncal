@@ -89,8 +89,10 @@ func defaultAgendaKeys() agendaKeyMap {
 // events (shown only when the toggle is on). They are rendered with the
 // day column and a faint "no events" label.
 type agendaRow struct {
-	day         time.Time
-	event       event.Event
+	day   time.Time
+	event event.Event
+	// todo is set on a todo row. A todo row has no event.
+	todo        *todoEntry
 	dayIndex    int // 1-based position within a multi-day span
 	totalDays   int
 	firstOfDay  bool
@@ -105,6 +107,7 @@ type AgendaModel struct {
 	windowStart time.Time // inclusive, day-aligned
 	windowEnd   time.Time // exclusive, day-aligned
 	events      []event.Event
+	todos       []todoEntry
 	calendars   map[int64]CalendarInfo
 	rows        []agendaRow
 	selected    int // index into rows; -1 when empty
@@ -246,15 +249,34 @@ func (m AgendaModel) SelectCurrentOrNext(now time.Time) AgendaModel {
 func (m AgendaModel) SetEvents(events []event.Event, calendars map[int64]CalendarInfo) AgendaModel {
 	m.events = events
 	m.calendars = calendars
+	return m.rebuild()
+}
+
+// SetTodos sets the placed todos and rebuilds the rows. The selection
+// stays on the same row, as with SetEvents.
+func (m AgendaModel) SetTodos(todos []todoEntry) AgendaModel {
+	m.todos = todos
+	return m.rebuild()
+}
+
+// buildRows builds the rows of the current window.
+func (m AgendaModel) buildRows() []agendaRow {
 	days := daysBetween(m.windowStart, m.windowEnd)
 	if days < 1 {
 		days = AgendaWindowDays
 	}
+	return buildAgendaRows(m.events, m.todos, m.windowStart, days, m.showEmptyDays)
+}
 
+// rebuild rebuilds the rows from the events and the todos. It finds the
+// previous selection again by identity, so background reloads and
+// infinite-scroll expansions do not move the selection.
+func (m AgendaModel) rebuild() AgendaModel {
 	// Snapshot the current selection by identity so we can re-find it in
 	// the rebuilt rows.
 	var prevDay, prevStart time.Time
 	var prevID int64
+	var prevTodo *todoEntry
 	var prevEmpty, hadSel bool
 	if m.selected >= 0 && m.selected < len(m.rows) {
 		r := m.rows[m.selected]
@@ -262,10 +284,11 @@ func (m AgendaModel) SetEvents(events []event.Event, calendars map[int64]Calenda
 		prevEmpty = r.emptyDay
 		prevID = r.event.ID
 		prevStart = r.event.StartTime
+		prevTodo = r.todo
 		hadSel = true
 	}
 
-	m.rows = buildAgendaRows(events, m.windowStart, days, m.showEmptyDays)
+	m.rows = m.buildRows()
 	anchor := m.anchorDay
 	m.anchorDay = time.Time{}
 	m.reloadPending = false
@@ -280,7 +303,14 @@ func (m AgendaModel) SetEvents(events []event.Event, calendars map[int64]Calenda
 				m.selected = i
 				break
 			}
-			if !prevEmpty && !r.emptyDay &&
+			if prevTodo != nil {
+				if r.todo != nil && r.todo.todo.ID == prevTodo.todo.ID {
+					m.selected = i
+					break
+				}
+				continue
+			}
+			if hasEvent(r) && !prevEmpty &&
 				r.event.ID == prevID && r.event.StartTime.Equal(prevStart) {
 				m.selected = i
 				break
@@ -405,17 +435,33 @@ func isSelectableRow(r agendaRow) bool {
 }
 
 // hasEvent reports whether r carries a real event (as opposed to an
-// empty-day placeholder).
+// empty-day placeholder or a todo).
 func hasEvent(r agendaRow) bool {
-	return isSelectableRow(r) && !r.emptyDay
+	return isSelectableRow(r) && !r.emptyDay && r.todo == nil
 }
 
-// buildAgendaRows expands events into per-day rows that cover the window
-// [start, start+days). Events that span multiple days produce one row per
-// day they touch. The first event of each day is tagged firstOfDay so the
-// renderer can show the day-column label above it. When showEmpty is true,
-// days with no events get a non-selectable emptyDay placeholder row.
-func buildAgendaRows(events []event.Event, start time.Time, days int, showEmpty bool) []agendaRow {
+// SelectedTodo returns the todo under the cursor, when the selected row is
+// a todo row.
+func (m AgendaModel) SelectedTodo() (todoEntry, bool) {
+	if m.selected < 0 || m.selected >= len(m.rows) || m.rows[m.selected].todo == nil {
+		return todoEntry{}, false
+	}
+	return *m.rows[m.selected].todo, true
+}
+
+// buildAgendaRows expands events and todos into per-day rows that cover the
+// window [start, start+days). Events that span multiple days produce one row
+// per day they touch. A todo produces one row on its display day. The first
+// row of each day is tagged firstOfDay so the renderer can show the
+// day-column label above it. When showEmpty is true, days with no rows get
+// an emptyDay placeholder row.
+//
+// The rows of one day come in this order:
+//
+//  1. All-day events.
+//  2. Todos without a time, in the order of todos (see sortTodoEntries).
+//  3. Timed events and timed todos, by time.
+func buildAgendaRows(events []event.Event, todos []todoEntry, start time.Time, days int, showEmpty bool) []agendaRow {
 	end := start.AddDate(0, 0, days)
 
 	byDay := make(map[string][]eventListDayEntry)
@@ -449,14 +495,20 @@ func buildAgendaRows(events []event.Event, start time.Time, days int, showEmpty 
 		byDay[k] = entries
 	}
 
+	todosByDay := make(map[string][]todoEntry)
+	for _, t := range todos {
+		key := t.placement.Day.Format("2006-01-02")
+		todosByDay[key] = append(todosByDay[key], t)
+	}
+
 	var rows []agendaRow
 	firstMonth := monthKey(start)
 	prevMonth := ""
 	for i := range days {
 		d := start.AddDate(0, 0, i)
 		key := d.Format("2006-01-02")
-		entries := byDay[key]
-		if len(entries) == 0 && !showEmpty {
+		dayRows := agendaDayRows(d, byDay[key], todosByDay[key])
+		if len(dayRows) == 0 && !showEmpty {
 			continue
 		}
 		if mk := monthKey(d); mk != prevMonth && mk != firstMonth {
@@ -465,19 +517,56 @@ func buildAgendaRows(events []event.Event, start time.Time, days int, showEmpty 
 			rows = append(rows, agendaRow{day: d, separator: true})
 		}
 		prevMonth = monthKey(d)
-		if len(entries) == 0 {
+		if len(dayRows) == 0 {
 			rows = append(rows, agendaRow{day: d, emptyDay: true, firstOfDay: true})
 			continue
 		}
-		for j, entry := range entries {
-			rows = append(rows, agendaRow{
-				day:        d,
-				event:      entry.ev,
-				dayIndex:   entry.dayIndex,
-				totalDays:  entry.totalDays,
-				firstOfDay: j == 0,
-			})
+		dayRows[0].firstOfDay = true
+		rows = append(rows, dayRows...)
+	}
+	return rows
+}
+
+// agendaDayRows returns the rows of one day in the order that
+// buildAgendaRows documents. entries must have the all-day events first.
+func agendaDayRows(day time.Time, entries []eventListDayEntry, todos []todoEntry) []agendaRow {
+	rows := make([]agendaRow, 0, len(entries)+len(todos))
+	eventRow := func(e eventListDayEntry) agendaRow {
+		return agendaRow{day: day, event: e.ev, dayIndex: e.dayIndex, totalDays: e.totalDays}
+	}
+	todoRow := func(t todoEntry) agendaRow {
+		return agendaRow{day: day, todo: &t}
+	}
+
+	i := 0
+	for ; i < len(entries) && entries[i].ev.AllDay; i++ {
+		rows = append(rows, eventRow(entries[i]))
+	}
+	var timedTodos []todoEntry
+	for _, t := range todos {
+		if t.placement.At.IsZero() {
+			rows = append(rows, todoRow(t))
+			continue
 		}
+		timedTodos = append(timedTodos, t)
+	}
+	sort.SliceStable(timedTodos, func(a, b int) bool {
+		return timedTodos[a].placement.At.Before(timedTodos[b].placement.At)
+	})
+
+	// Merge the timed events (already in time order) with the timed todos.
+	// An event goes first when the two have the same time.
+	j := 0
+	for i < len(entries) || j < len(timedTodos) {
+		eventFirst := j >= len(timedTodos) ||
+			(i < len(entries) && !timedTodos[j].placement.At.Before(effectiveStartOnDay(entries[i].ev, day, entries[i].dayIndex)))
+		if eventFirst {
+			rows = append(rows, eventRow(entries[i]))
+			i++
+			continue
+		}
+		rows = append(rows, todoRow(timedTodos[j]))
+		j++
 	}
 	return rows
 }

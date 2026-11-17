@@ -189,12 +189,12 @@ func (m WeekModel) DayAtPosition(x, y int) (time.Time, bool) {
 	return anchor.AddDate(0, 0, col), true
 }
 
-func (m WeekModel) EventAtPosition(x, y int) int64 {
+func (m WeekModel) ItemAtPosition(x, y int) calendarItemRef {
 	anchor := m.WeekStartDate()
 
 	gridX := x - timeLabelWidth - 1
 	if gridX < 0 {
-		return 0
+		return calendarItemRef{}
 	}
 	colWs := calcWeekColWidths(m.width)
 	col := -1
@@ -207,13 +207,13 @@ func (m WeekModel) EventAtPosition(x, y int) int64 {
 		colStart += colWs[j] + 1
 	}
 	if col < 0 {
-		return 0
+		return calendarItemRef{}
 	}
 
 	allDayRows := max(m.allDayRowCount(), 1)
 	fixedLines := 2 + 1 + 1 + allDayRows + 1
 	if y < fixedLines {
-		return 0
+		return calendarItemRef{}
 	}
 
 	scrollOffset := min(max(m.scrollOffset, 0), m.maxScroll())
@@ -227,7 +227,7 @@ func (m WeekModel) EventAtPosition(x, y int) int64 {
 	resolveOverlaps(placed)
 	matches := findPlacedEvents(placed, row, col)
 	if len(matches) == 0 {
-		return 0
+		return calendarItemRef{}
 	}
 	xInCol := gridX - colStart
 	return hitSubCol(matches, xInCol, colWs[col])

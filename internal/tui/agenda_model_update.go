@@ -43,6 +43,9 @@ func (m AgendaModel) Update(msg tea.Msg) (AgendaModel, tea.Cmd) {
 		if ev, ok := m.SelectedEvent(); ok {
 			return m, func() tea.Msg { return EventViewRequestedMsg{Event: ev} }
 		}
+		if e, ok := m.SelectedTodo(); ok {
+			return m, func() tea.Msg { return TodoViewRequestedMsg{Todo: e.todo} }
+		}
 		// Empty list, or empty-day placeholder selected: treat Enter as
 		// "create event on the selected day".
 		if len(m.rows) == 0 ||
@@ -71,11 +74,7 @@ func (m AgendaModel) Update(msg tea.Msg) (AgendaModel, tea.Cmd) {
 		return m, nil
 	case key.Matches(kp, m.keys.ToggleEmpty):
 		m.showEmptyDays = !m.showEmptyDays
-		days := daysBetween(m.windowStart, m.windowEnd)
-		if days < 1 {
-			days = AgendaWindowDays
-		}
-		m.rows = buildAgendaRows(m.events, m.windowStart, days, m.showEmptyDays)
+		m.rows = m.buildRows()
 		m.selected = firstSelectableOnOrAfter(m.rows, m.cursor)
 		m.clampScroll()
 		show := m.showEmptyDays
@@ -277,6 +276,10 @@ func (m AgendaModel) HandleClick(x, y int) (AgendaModel, tea.Cmd) {
 	if r.emptyDay {
 		day := r.day
 		return m, func() tea.Msg { return EventCreateMsg{Day: day} }
+	}
+	if r.todo != nil {
+		td := r.todo.todo
+		return m, func() tea.Msg { return TodoViewRequestedMsg{Todo: td} }
 	}
 	return m, func() tea.Msg { return EventViewRequestedMsg{Event: r.event} }
 }

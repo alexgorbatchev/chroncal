@@ -91,10 +91,11 @@ func (m Model) withKeys(keys appKeyMap) Model {
 	return m
 }
 
-// newDayDialog builds the day dialog (the events of one day) with the
-// app keymap, the theme, and the screen size of the model.
+// newDayDialog builds the day dialog (the events and the todos of one day)
+// with the app keymap, the theme, and the screen size of the model.
 func (m Model) newDayDialog(day time.Time, events []event.Event) EventDialogModel {
 	return NewEventDialogModel(day, events, m.calendars, newThemedHelp(m.theme)).
+		SetTodos(m.visibleTodosOn(day)).
 		WithAppKeys(m.keys).
 		SetSelectedColor(m.theme.Selected).
 		SetSize(m.width, m.height)

@@ -196,7 +196,7 @@ func (m EventDialogModel) handleKey(msg tea.KeyPressMsg) (EventDialogModel, tea.
 	case key.Matches(msg, sk.Enter):
 		switch m.currentZone() {
 		case zoneList:
-			if len(m.events) == 0 {
+			if m.rowCount() == 0 {
 				day := m.day
 				return m, func() tea.Msg { return EventCreateMsg{Day: day} }
 			}
@@ -266,7 +266,7 @@ func (m EventDialogModel) handleMouse(msg tea.MouseClickMsg) (EventDialogModel, 
 		return m, cmd
 	}
 
-	if len(m.events) == 0 {
+	if m.rowCount() == 0 {
 		return m, nil
 	}
 

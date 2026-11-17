@@ -74,11 +74,13 @@ func (m Model) navigateMainTo(t time.Time) Model {
 // current m.events using the current m.hiddenCalendars set. Use this after the
 // hidden set changes (no DB round-trip needed).
 func (m Model) refreshCalendarViews() Model {
-	calEvents := eventsToCalendar(m.events, m.calendars, m.hiddenCalendars)
-	m.calendar = m.calendar.SetEvents(calEvents)
-	m.week = m.week.SetEvents(calEvents)
-	m.day = m.day.SetEvents(calEvents)
-	m.agenda = m.agenda.SetEvents(filterVisibleEvents(m.events, m.hiddenCalendars), m.calendars)
+	items := m.calendarItems()
+	m.calendar = m.calendar.SetEvents(items)
+	m.week = m.week.SetEvents(items)
+	m.day = m.day.SetEvents(items)
+	m.agenda = m.agenda.
+		SetEvents(filterVisibleEvents(m.events, m.hiddenCalendars), m.calendars).
+		SetTodos(filterVisibleTodos(m.todoEntries, m.hiddenCalendars))
 	return m
 }
 
@@ -244,10 +246,10 @@ func (m Model) textEntryActive() bool {
 }
 
 // keyOnlyOverlayOpen reports whether an overlay with no text field is open:
-// the event view, the day dialog, a confirm, a choice, the help dialog, or
-// the trash.
+// the event view, the todo view, the day dialog, a confirm, a choice, the
+// help dialog, or the trash.
 func (m Model) keyOnlyOverlayOpen() bool {
-	return m.viewDialogOpen || m.dialogOpen || m.confirmOpen || m.choiceOpen ||
+	return m.viewDialogOpen || m.todoViewOpen || m.dialogOpen || m.confirmOpen || m.choiceOpen ||
 		m.helpDialogOpen || m.trashOpen
 }
 

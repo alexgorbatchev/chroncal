@@ -63,6 +63,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.trash = m.trash.SetSize(m.width, m.height)
 	m.dialog = m.dialog.SetSize(m.width, m.height)
 	m.viewDialog = m.viewDialog.SetSize(m.width, m.height)
+	m.todoView = m.todoView.SetSize(m.width, m.height)
 	m.confirmDialog = m.confirmDialog.SetSize(m.width, m.height)
 	m.choiceDialog = m.choiceDialog.SetSize(m.width, m.height)
 	m.calendarManager = m.calendarManager.SetSize(m.width, m.height)

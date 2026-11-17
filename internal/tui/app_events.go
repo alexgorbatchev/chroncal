@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/douglasdemoura/chroncal/internal/event"
+	"github.com/douglasdemoura/chroncal/internal/todo"
 	"github.com/douglasdemoura/chroncal/internal/trash"
 )
 
@@ -103,9 +104,39 @@ func (m Model) dispatchEditScope(editID int64, choice int, save EventFormSaveMsg
 	return eventUpdateAfterScopeMsg{calendarID: save.CalendarID}
 }
 
+// loadEvents reloads the events and the todos of the active view.
 func (m Model) loadEvents() tea.Cmd {
 	from, to := m.expectedEventRange()
-	return m.queryEventsRange(from, to, false)
+	return tea.Batch(m.queryEventsRange(from, to, false), m.queryTodos(from, to))
+}
+
+// queryTodos loads every open todo and the completed todos of [from, to).
+// An open todo can show on today whatever its date, so the open todos have
+// no range. The todos are few, so each load reads all of them again.
+func (m Model) queryTodos(from, to time.Time) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		open, err := m.app.Recurrences.ListOpenTodos(ctx)
+		if err != nil {
+			return todosLoadedMsg{from: from, to: to, err: err}
+		}
+		completed, err := m.app.Recurrences.ListCompletedTodos(ctx, from, to)
+		if err != nil {
+			return todosLoadedMsg{from: from, to: to, err: err}
+		}
+		todos := make([]todo.Todo, 0, len(open)+len(completed))
+		for _, o := range open {
+			todos = append(todos, o.Todo)
+		}
+		return todosLoadedMsg{from: from, to: to, todos: append(todos, completed...)}
+	}
+}
+
+// calendarItems returns the month, week, and day items: the visible events,
+// then the visible todos.
+func (m Model) calendarItems() []CalendarEvent {
+	items := eventsToCalendar(m.events, m.calendars, m.hiddenCalendars)
+	return append(items, todosToCalendar(m.todoEntries, m.calendars, m.hiddenCalendars)...)
 }
 
 // loadEventsIncremental queries only the newly-added slice of an agenda
@@ -113,8 +144,17 @@ func (m Model) loadEvents() tea.Cmd {
 // range. Infinite-scroll then stays O(1 step) in query cost even after the
 // user has scrolled years back. It falls back to a full refresh when the
 // ranges do not share an edge (for example after a cursor jump).
+//
+// The todos always reload for the whole expected range. That query is
+// small, and the completed todos of the range then stay complete.
 func (m Model) loadEventsIncremental() tea.Cmd {
 	wantFrom, wantTo := m.expectedEventRange()
+	return tea.Batch(m.incrementalEventsQuery(wantFrom, wantTo), m.queryTodos(wantFrom, wantTo))
+}
+
+// incrementalEventsQuery returns the events query for the part of
+// [wantFrom, wantTo) that m.events does not cover yet.
+func (m Model) incrementalEventsQuery(wantFrom, wantTo time.Time) tea.Cmd {
 	if m.loadedFrom.IsZero() || m.loadedTo.IsZero() {
 		return m.queryEventsRange(wantFrom, wantTo, false)
 	}

@@ -145,15 +145,15 @@ func (m DayModel) DayAtPosition(x, y int) (time.Time, bool) {
 	return m.cursor, true
 }
 
-func (m DayModel) EventAtPosition(x, y int) int64 {
+func (m DayModel) ItemAtPosition(x, y int) calendarItemRef {
 	if x < timeLabelWidth+1 {
-		return 0
+		return calendarItemRef{}
 	}
 
 	allDayRows := max(m.allDayCount(), 1)
 	fixedLines := 2 + 1 + allDayRows + 1
 	if y < fixedLines {
-		return 0
+		return calendarItemRef{}
 	}
 
 	scrollOffset := min(max(m.scrollOffset, 0), m.maxScroll())
@@ -170,7 +170,7 @@ func (m DayModel) EventAtPosition(x, y int) int64 {
 	resolveOverlaps(placed)
 	matches := findPlacedEvents(placed, row, 0)
 	if len(matches) == 0 {
-		return 0
+		return calendarItemRef{}
 	}
 	xInCol := x - timeLabelWidth - 1
 	return hitSubCol(matches, xInCol, colWidth)

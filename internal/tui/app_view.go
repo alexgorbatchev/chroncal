@@ -221,6 +221,10 @@ func (m Model) View() tea.View {
 		bw, bh := m.viewDialog.BoxSize()
 		v.Content = m.compositeOverlay(v.Content, m.viewDialog.View(), bw, bh)
 	}
+	if m.todoViewOpen {
+		bw, bh := m.todoView.BoxSize()
+		v.Content = m.compositeOverlay(v.Content, m.todoView.View(), bw, bh)
+	}
 	if m.formOpen {
 		bw, bh := m.form.BoxSize()
 		v.Content = m.compositeOverlay(v.Content, m.form.View(), bw, bh)

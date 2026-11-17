@@ -11,6 +11,10 @@ var Glyphs = map[string]string{
 	"checkbox.on":  "[x]",
 	"checkbox.off": "[ ]",
 
+	// Todo state in the calendar views
+	"todo.open": "☐",
+	"todo.done": "☑",
+
 	// Status
 	"status.ok": "✓",
 

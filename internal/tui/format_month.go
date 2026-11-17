@@ -330,7 +330,7 @@ func buildCalendarCell(d time.Time, isToday, isSelected, inMonth bool, events []
 			overflow = len(events) - maxEventLines + 1
 			break
 		}
-		pills = append(pills, renderEventPill(ev, cellW, !inMonth))
+		pills = append(pills, renderCalendarItem(ev, cellW, !inMonth))
 	}
 	if overflow > 0 && len(pills) > 0 {
 		pills[len(pills)-1] = lipgloss.NewStyle().Faint(true).

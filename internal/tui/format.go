@@ -17,16 +17,40 @@ const (
 	timeLabelWidth      = 8
 )
 
-// CalendarEvent is the render-only view of an event inside the month grid.
-// Callers resolve colors and other domain data before they pass these in.
+// calendarItemKind tells which domain record a CalendarEvent shows.
+type calendarItemKind int
+
+const (
+	calendarItemEvent calendarItemKind = iota
+	calendarItemTodo
+)
+
+// CalendarEvent is the render-only view of an event or a todo inside the
+// month, week, and day grids. Callers resolve colors and other domain data
+// before they pass these in. Kind and ID together identify the record.
 type CalendarEvent struct {
 	ID        int64
+	Kind      calendarItemKind
 	Title     string
 	Color     string // hex like "#a6e3a1"; empty → default muted background
 	AllDay    bool
 	Day       time.Time // local day the event should render on
 	StartTime time.Time
 	EndTime   time.Time
+	// Done and Overdue apply to todos only.
+	Done    bool
+	Overdue bool
+}
+
+// calendarItemRef identifies the record behind a CalendarEvent.
+type calendarItemRef struct {
+	Kind calendarItemKind
+	ID   int64
+}
+
+// ref returns the record identity of ev.
+func (ev CalendarEvent) ref() calendarItemRef {
+	return calendarItemRef{Kind: ev.Kind, ID: ev.ID}
 }
 
 type placedEvent struct {
@@ -134,7 +158,7 @@ func findPlacedEvents(placed []placedEvent, row, col int) []placedEvent {
 	return result
 }
 
-func hitSubCol(matches []placedEvent, xInCol, totalWidth int) int64 {
+func hitSubCol(matches []placedEvent, xInCol, totalWidth int) calendarItemRef {
 	n := matches[0].numSubCols
 	widths := make([]int, n)
 	base := totalWidth / n
@@ -150,18 +174,24 @@ func hitSubCol(matches []placedEvent, xInCol, totalWidth int) int64 {
 		if xInCol >= offset && xInCol < offset+widths[sub] {
 			for _, m := range matches {
 				if m.subCol == sub {
-					return m.event.ID
+					return m.event.ref()
 				}
 			}
-			return 0
+			return calendarItemRef{}
 		}
 		offset += widths[sub]
 	}
-	return 0
+	return calendarItemRef{}
 }
 
 func renderTimeCellContent(p placedEvent, row, width int) string {
 	relRow := row - p.startRow
+	if p.event.Kind == calendarItemTodo {
+		if relRow == 0 {
+			return renderTodoLine(p.event, width, false)
+		}
+		return strings.Repeat(" ", width)
+	}
 	bg := ActiveTheme().Muted
 	fg := oklch.ContrastingFg(bg)
 	if p.event.Color != "" {

@@ -27,7 +27,7 @@ func TestBuildAgendaRows_AllDayNegativeOffset(t *testing.T) {
 	}
 
 	start := time.Date(2026, 4, 15, 0, 0, 0, 0, time.Local)
-	rows := buildAgendaRows([]event.Event{ev}, start, 7, false)
+	rows := buildAgendaRows([]event.Event{ev}, nil, start, 7, false)
 
 	var gotDays []string
 	for _, r := range rows {

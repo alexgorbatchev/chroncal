@@ -14,6 +14,21 @@ SELECT * FROM todos WHERE status = ? AND deleted_at IS NULL ORDER BY due_date, s
 -- name: ListTodosByDueDateRange :many
 SELECT * FROM todos WHERE due_date >= ? AND due_date < ? AND deleted_at IS NULL ORDER BY due_date, summary;
 
+-- name: ListCompletedTodosByDate :many
+-- Completed rows that a calendar shows as done: non-recurring todos and
+-- overrides. A recurring master is not one occurrence, so the query omits it.
+-- The date is DUE, or completed_at for a todo without DUE. The bounds are
+-- date strings, so the caller applies the exact window.
+SELECT * FROM todos
+WHERE status = 'COMPLETED'
+  AND deleted_at IS NULL
+  AND (recurrence_id != '' OR (recurrence_rule IS NULL AND (rdates IS NULL OR rdates = '')))
+  AND (
+    (due_date >= sqlc.arg(from_date) AND due_date < sqlc.arg(to_date))
+    OR (due_date IS NULL AND completed_at >= sqlc.arg(from_date) AND completed_at < sqlc.arg(to_date))
+  )
+ORDER BY due_date, summary;
+
 -- name: ListAllTodos :many
 SELECT * FROM todos WHERE deleted_at IS NULL ORDER BY due_date, summary;
 

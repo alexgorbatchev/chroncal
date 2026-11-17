@@ -23,6 +23,7 @@ const (
 	overlayCalendarManager
 	overlayForm
 	overlayViewDialog
+	overlayTodoView
 	overlayDialog
 )
 
@@ -286,6 +287,17 @@ func (m Model) overlayStack() []overlayLayer {
 			update: func(m *Model, msg tea.Msg) tea.Cmd {
 				var cmd tea.Cmd
 				m.viewDialog, cmd = m.viewDialog.Update(msg)
+				return cmd
+			},
+		})
+	}
+	if m.todoViewOpen {
+		layers = append(layers, overlayLayer{
+			kind:        overlayTodoView,
+			passthrough: passUnlessInput,
+			update: func(m *Model, msg tea.Msg) tea.Cmd {
+				var cmd tea.Cmd
+				m.todoView, cmd = m.todoView.Update(msg)
 				return cmd
 			},
 		})

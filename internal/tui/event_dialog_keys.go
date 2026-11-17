@@ -50,7 +50,7 @@ func (m EventDialogModel) shortHelp() []key.Binding {
 		key.WithKeys("left", "right", "h", "l"),
 		key.WithHelp("←→", "days"),
 	)
-	if len(m.events) == 0 {
+	if m.rowCount() == 0 {
 		return []key.Binding{days, sk.Enter, m.keys.Create, sk.Close}
 	}
 	return []key.Binding{nav, days, sk.Tab, m.keys.Create, m.keys.Delete, sk.Close}

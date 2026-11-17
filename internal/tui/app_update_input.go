@@ -96,7 +96,7 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		m.clickedEventID = m.day.EventAtPosition(msg.X-ox, msg.Y-oy)
+		m.clickedItem = m.day.ItemAtPosition(msg.X-ox, msg.Y-oy)
 		var cmd tea.Cmd
 		m.day, cmd = m.day.selectDay(day)
 		return m, cmd
@@ -105,7 +105,7 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		m.clickedEventID = m.week.EventAtPosition(msg.X-ox, msg.Y-oy)
+		m.clickedItem = m.week.ItemAtPosition(msg.X-ox, msg.Y-oy)
 		var cmd tea.Cmd
 		m.week, cmd = m.week.selectDay(day)
 		return m, cmd
@@ -118,7 +118,7 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		m.clickedEventID = m.calendar.EventAtPosition(msg.X-ox, msg.Y-oy)
+		m.clickedItem = m.calendar.ItemAtPosition(msg.X-ox, msg.Y-oy)
 		var cmd tea.Cmd
 		m.calendar, cmd = m.calendar.selectDay(day)
 		return m, cmd

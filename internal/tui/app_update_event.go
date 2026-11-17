@@ -46,7 +46,7 @@ func (m Model) handleEventsLoaded(msg eventsLoadedMsg) (tea.Model, tea.Cmd) {
 		m.loadedFrom = msg.from
 		m.loadedTo = msg.to
 	}
-	calEvents := eventsToCalendar(msg.events, m.calendars, m.hiddenCalendars)
+	calEvents := m.calendarItems()
 	switch m.viewMode {
 	case viewDay:
 		m.day = m.day.SetEvents(calEvents)
@@ -61,10 +61,7 @@ func (m Model) handleEventsLoaded(msg eventsLoadedMsg) (tea.Model, tea.Cmd) {
 	default:
 		m.calendar = m.calendar.SetEvents(calEvents)
 	}
-	if m.dialogOpen {
-		dayEvents := eventsOn(filterVisibleEvents(m.events, m.hiddenCalendars), m.dialog.day)
-		m.dialog = m.dialog.SetEvents(dayEvents)
-	}
+	m = m.refreshDayDialog()
 	// After an agenda load lands, pull in the next month if the loaded
 	// rows do not fill the viewport. That prevents a stare at blank
 	// space below a sparse month until the user navigates.
@@ -86,19 +83,37 @@ func (m Model) handleEventsLoaded(msg eventsLoadedMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleCalendarDaySelected(msg CalendarDaySelectedMsg) (tea.Model, tea.Cmd) {
 	dayEvents := eventsOn(filterVisibleEvents(m.events, m.hiddenCalendars), msg.Day)
-	if m.clickedEventID > 0 {
-		clicked := m.clickedEventID
-		m.clickedEventID = 0
-		for _, e := range dayEvents {
-			if e.ID == clicked {
-				ev := e
-				return m, func() tea.Msg { return EventViewRequestedMsg{Event: ev} }
-			}
+	clicked := m.clickedItem
+	m.clickedItem = calendarItemRef{}
+	if clicked.ID > 0 {
+		if cmd := m.viewClickedItem(clicked, msg.Day, dayEvents); cmd != nil {
+			return m, cmd
 		}
 	}
 	m.dialog = m.newDayDialog(msg.Day, dayEvents)
 	m.dialogOpen = true
 	return m, nil
+}
+
+// viewClickedItem returns the command that opens the view dialog of the
+// clicked item on day. It returns nil when the item is not on that day.
+func (m Model) viewClickedItem(clicked calendarItemRef, day time.Time, dayEvents []event.Event) tea.Cmd {
+	if clicked.Kind == calendarItemTodo {
+		for _, e := range m.visibleTodosOn(day) {
+			if e.todo.ID == clicked.ID {
+				td := e.todo
+				return func() tea.Msg { return TodoViewRequestedMsg{Todo: td} }
+			}
+		}
+		return nil
+	}
+	for _, e := range dayEvents {
+		if e.ID == clicked.ID {
+			ev := e
+			return func() tea.Msg { return EventViewRequestedMsg{Event: ev} }
+		}
+	}
+	return nil
 }
 
 func (m Model) handleEventEdit(msg EventEditMsg) (tea.Model, tea.Cmd) {
